@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.endpoints import search, business
+from app.api.endpoints import report
 
 app = FastAPI(
     title="DataBridge API",
@@ -18,8 +18,7 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(search.router, prefix="/api", tags=["search"])
-app.include_router(business.router, prefix="/api", tags=["business"])
+app.include_router(report.router, prefix="/api", tags=["search"])
 
 if __name__ == "__main__":
     import uvicorn

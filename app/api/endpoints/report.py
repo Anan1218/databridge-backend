@@ -33,8 +33,10 @@ async def generate_report(request: ReportRequest, token = Depends(verify_token))
             urls=request.urls
         )
         
-        # Create a new report document in Firebase
-        report_ref = db.collection('reports').document()
+        # Create a new report document under the user's reports collection
+        user_ref = db.collection('users').document(request.userId)
+        reports_ref = user_ref.collection('reports').document()
+        
         report_data = {
             'userId': request.userId,
             'email': request.email,
@@ -44,11 +46,11 @@ async def generate_report(request: ReportRequest, token = Depends(verify_token))
             'content': report_content,
             'timestamp': firestore.SERVER_TIMESTAMP,
         }
-        report_ref.set(report_data)
+        reports_ref.set(report_data)
         
         return ReportResponse(
             success=True,
-            reportId=report_ref.id
+            reportId=reports_ref.id
         )
         
     except Exception as e:

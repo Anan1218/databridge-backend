@@ -1,11 +1,12 @@
 import os
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from dotenv import load_dotenv
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
+import asyncio
 
 # Load environment variables
 load_dotenv()
@@ -108,3 +109,85 @@ async def batch_search_and_process(queries: List[str], num_results: int = 10) ->
     except Exception as e:
         print(f"Error in batch search and process: {str(e)}")
         return [], [], None 
+
+async def generate_business_insights(
+    business_name: str,
+    location: str,
+    industry: Optional[str] = None
+) -> Dict:
+    """Generate business insights using search APIs"""
+    # Create search queries based on business info
+    queries = [
+        f"{business_name} competitors in {location}",
+        f"{industry if industry else 'business'} market trends {location}",
+        f"local {industry if industry else ''} news {location}"
+    ]
+    
+    # Run searches concurrently
+    search_tasks = [
+        _search_competitors(business_name, location),
+        _search_market_insights(industry, location),
+        _search_trending_topics(industry, location)
+    ]
+    
+    competitors, market_insights, trends = await asyncio.gather(*search_tasks)
+    
+    return {
+        'competitors': competitors,
+        'market_insights': market_insights,
+        'trends': trends
+    }
+
+async def _search_competitors(business_name: str, location: str) -> List[Dict]:
+    """Search for local competitors"""
+    results = await perform_google_search(
+        f"{business_name} competitors in {location}",
+        num_results=5
+    )
+    # Process results to extract competitor information
+    competitors = []
+    for result in results:
+        competitors.append({
+            'name': extract_business_name(result),
+            'url': extract_url(result),
+            'description': extract_description(result)
+        })
+    return competitors
+
+async def _search_market_insights(industry: Optional[str], location: str) -> List[str]:
+    """Search for market insights"""
+    results = await perform_google_search(
+        f"{industry if industry else 'business'} market trends {location}",
+        num_results=5
+    )
+    return [extract_insight(result) for result in results]
+
+async def _search_trending_topics(industry: Optional[str], location: str) -> List[str]:
+    """Search for trending topics"""
+    results = await perform_google_search(
+        f"latest {industry if industry else 'business'} news {location}",
+        num_results=5
+    )
+    return [extract_topic(result) for result in results]
+
+# Helper functions for extracting information from search results
+def extract_business_name(result: str) -> str:
+    # Extract business name from search result
+    title = result.split('Title: ')[1].split('\n')[0]
+    return title.split(' - ')[0]
+
+def extract_url(result: str) -> str:
+    # Extract URL from search result
+    return result.split('URL: ')[1].split('\n')[0]
+
+def extract_description(result: str) -> str:
+    # Extract description from search result
+    return result.split('Description: ')[1].split('\n')[0]
+
+def extract_insight(result: str) -> str:
+    # Extract market insight from search result
+    return result.split('Description: ')[1].split('\n')[0]
+
+def extract_topic(result: str) -> str:
+    # Extract trending topic from search result
+    return result.split('Title: ')[1].split('\n')[0] 

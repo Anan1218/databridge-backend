@@ -4,10 +4,9 @@ import asyncio
 from app.utils.firebase import db
 from app.utils.search import search_and_process
 
+# Commented out for temporary disable
+"""
 async def process_user_searches():
-    """
-    Main function to process searches for all users who need updates
-    """
     # Get all users who need their searches updated
     users_ref = db.collection('users')
     week_ago = datetime.now() - timedelta(days=7)
@@ -20,9 +19,6 @@ async def process_user_searches():
         await update_user_searches(user.id, user_data)
 
 async def update_user_searches(user_id: str, user_data: dict):
-    """
-    Update searches for a specific user
-    """
     try:
         # Get user's search preferences
         search_terms = user_data.get('search_terms', [])
@@ -57,10 +53,11 @@ async def update_user_searches(user_id: str, user_data: dict):
             'error': str(e),
             'timestamp': firestore.SERVER_TIMESTAMP
         })
+"""
 
 def run_scheduler():
     """
-    Run the scheduler to process user searches
+    Temporarily disabled scheduler
     """
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(process_user_searches()) 
+    print("Scheduler is temporarily disabled")
+    pass 

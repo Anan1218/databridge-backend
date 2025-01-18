@@ -1,44 +1,81 @@
-from googleapiclient.discovery import build
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.chains.summarize import load_summarize_chain
-from langchain.docstore.document import Document
 import os
+from typing import List, Tuple, Optional
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from dotenv import load_dotenv
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import FAISS
+from langchain_openai import OpenAIEmbeddings
 
+# Load environment variables
 load_dotenv()
 
-def get_search_results(query: str, num_results: int = 10):
-    service = build("customsearch", "v1", developerKey=os.getenv("GOOGLE_CUSTOM_SEARCH_API_KEY"))
-    
+# Get API credentials from environment
+GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+
+async def perform_google_search(query: str, num_results: int = 10) -> List[str]:
+    """
+    Perform a Google search using the Custom Search JSON API
+    """
     try:
-        results = service.cse().list(
+        # Create a service object for the Custom Search API
+        service = build('customsearch', 'v1', developerKey=GOOGLE_API_KEY)
+        
+        # Print debug information
+        print(f"Searching for query: {query}")
+        
+        # Perform the search
+        result = service.cse().list(
             q=query,
-            cx=os.getenv("GOOGLE_CSE_ID"),
+            cx='017576662512468239146:omuauf_lfve',
             num=num_results
         ).execute()
         
-        return results.get("items", [])
+        # Extract and process results
+        search_results = []
+        if 'items' in result:
+            for item in result['items']:
+                content = f"Title: {item['title']}\nURL: {item['link']}\nDescription: {item.get('snippet', '')}\n"
+                search_results.append(content)
+            print(f"Found {len(search_results)} results")
+        else:
+            print("No items found in search results")
+            print(f"Response: {result}")
+        
+        return search_results
+    
+    except HttpError as e:
+        print(f"HTTP Error performing Google search: {e.resp.status} - {e.content}")
+        return []
     except Exception as e:
-        raise Exception(f"Error fetching search results: {str(e)}")
+        print(f"Error performing Google search: {str(e)}")
+        return []
 
-def process_search_results(results, llm):
-    # Combine all snippets and content
-    combined_text = ""
-    for result in results:
-        title = result.get("title", "")
-        snippet = result.get("snippet", "")
-        combined_text += f"\nTitle: {title}\nSnippet: {snippet}\n"
-    
-    # Split text into chunks
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200
-    )
-    texts = text_splitter.split_text(combined_text)
-    docs = [Document(page_content=t) for t in texts]
-    
-    # Summarize using Langchain
-    chain = load_summarize_chain(llm, chain_type="map_reduce")
-    summary = chain.run(docs)
-    
-    return summary 
+async def process_search_results(search_results: List[str]) -> Tuple[List[str], Optional[FAISS]]:
+    """
+    Process search results using LangChain and create vector embeddings
+    """
+    try:
+        # Process results with LangChain
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=200
+        )
+        texts = text_splitter.split_text('\n'.join(search_results))
+        
+        # Create vector store
+        embeddings = OpenAIEmbeddings()
+        vectorstore = FAISS.from_texts(texts, embeddings)
+        
+        return texts, vectorstore
+    except Exception as e:
+        print(f"Error processing search results: {str(e)}")
+        return [], None
+
+async def search_and_process(query: str, num_results: int = 10) -> Tuple[List[str], List[str], Optional[FAISS]]:
+    """
+    Convenience function to perform search and process results in one go
+    """
+    search_results = await perform_google_search(query, num_results)
+    texts, vectorstore = await process_search_results(search_results)
+    return search_results, texts, vectorstore 

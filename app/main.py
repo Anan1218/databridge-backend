@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from firebase_admin import auth, firestore
 from app.utils.firebase import db
-from app.utils.search import get_search_results, process_search_results
+from app.utils.search import perform_google_search, process_search_results
 from pydantic import BaseModel
 from typing import List, Optional
 from langchain.llms import OpenAI

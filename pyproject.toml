@@ -1,2 +1,8 @@
-[tool.pytest]
-pythonpath = "." 
+[tool.pytest.ini_options]
+pythonpath = [
+    "."
+]
+addopts = "-v"
+testpaths = [
+    "tests",
+] 

@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from firebase_admin import auth, firestore
 from app.utils.firebase import db
-from app.utils.search import perform_google_search, process_search_results
+from app.utils.search import perform_google_search, process_search_results, batch_search_and_process
 from pydantic import BaseModel
 from typing import List, Optional
 from langchain.llms import OpenAI
@@ -25,6 +25,16 @@ app.add_middleware(
 class SearchRequest(BaseModel):
     queries: List[str]
     num_results: Optional[int] = 10
+
+class BatchSearchRequest(BaseModel):
+    queries: List[str]
+    num_results_per_query: Optional[int] = 10
+
+class SearchResponse(BaseModel):
+    raw_results: List[str]
+    processed_chunks: List[str]
+    success: bool
+    error: Optional[str] = None
 
 # Firebase auth middleware
 async def verify_token(authorization: str = Header(...)):
@@ -97,6 +107,44 @@ async def get_searches(token = Depends(verify_token)):
         return searches
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/search/batch", response_model=SearchResponse)
+async def batch_search(request: BatchSearchRequest, token: str = Depends(verify_token)):
+    """
+    Perform multiple searches and process results through LangChain
+    """
+    try:
+        # Perform batch search
+        raw_results, processed_texts, vectorstore = await batch_search_and_process(
+            request.queries,
+            request.num_results_per_query
+        )
+        
+        # Store results in Firebase for the user
+        user_id = token['uid']
+        results_ref = db.collection('users').document(user_id).collection('search_results')
+        
+        # Store search batch
+        batch_ref = results_ref.add({
+            'queries': request.queries,
+            'timestamp': firestore.SERVER_TIMESTAMP,
+            'num_results': len(raw_results),
+            'num_processed_chunks': len(processed_texts)
+        })
+        
+        return SearchResponse(
+            raw_results=raw_results,
+            processed_chunks=processed_texts,
+            success=True
+        )
+        
+    except Exception as e:
+        return SearchResponse(
+            raw_results=[],
+            processed_chunks=[],
+            success=False,
+            error=str(e)
+        )
 
 if __name__ == "__main__":
     import uvicorn

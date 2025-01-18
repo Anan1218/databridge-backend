@@ -29,7 +29,7 @@ async def search_and_summarize(request: SearchRequest, token = Depends(verify_to
         results = []
         for query in request.queries:
             # Get search results
-            search_results = get_search_results(query, request.num_results)
+            search_results = await perform_google_search(query, request.num_results)
             
             # Process and summarize results
             summary = process_search_results(search_results)

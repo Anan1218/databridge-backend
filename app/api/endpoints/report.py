@@ -36,12 +36,10 @@ async def generate_report(request: ReportRequest):
         report_ref = db.collection('users').document(request.userId)\
                       .collection('reports').document()
         
-        # Create document with all data
+        # Create document with minimal data
         report_data = {
             'userId': request.userId,
             'email': request.email,
-            'searchQueries': request.searchQueries,
-            'urls': request.urls,
             'status': 'completed',
             'content': report_content['main_content'],
             'timestamp': firestore.SERVER_TIMESTAMP,

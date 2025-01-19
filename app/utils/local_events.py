@@ -17,7 +17,7 @@ async def search_local_events(location: str, event_type: str = None, date_range:
     try:
         city, state = extract_city_and_state(location)
         # Construct search query
-        base_query = f"events in {location}"
+        base_query = f"events in {city}, {state}"
         if event_type:
             base_query += f" {event_type}"
         if date_range:

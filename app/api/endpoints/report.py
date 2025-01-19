@@ -14,6 +14,7 @@ class ReportRequest(BaseModel):
     urls: List[str]
     location: Optional[str] = None  # Added location field
     businessName: Optional[str] = None  # Added businessName field
+    reportId: Optional[str] = None  # Add this field
 
 class ReportResponse(BaseModel):
     success: bool
@@ -28,45 +29,53 @@ async def generate_report(request: ReportRequest):
             search_queries=request.searchQueries,
             urls=request.urls,
             location=request.location,
-            business_name=request.businessName  # Pass businessName to report generator
+            business_name=request.businessName
         )
         
-        # Create a new report document under the user's reports collection
-        user_ref = db.collection('users').document(request.userId)
-        reports_ref = user_ref.collection('reports').document()
+        # Create a new report document
+        report_ref = db.collection('users').document(request.userId)\
+                      .collection('reports').document()
         
-        # Store main report data
+        # Create document with all data
         report_data = {
             'userId': request.userId,
             'email': request.email,
             'searchQueries': request.searchQueries,
             'urls': request.urls,
-            'location': request.location,
-            'businessName': request.businessName,  # Added businessName to stored data
             'status': 'completed',
             'content': report_content['main_content'],
             'timestamp': firestore.SERVER_TIMESTAMP,
         }
         
-        # Create the main report document
-        reports_ref.set(report_data)
+        # Add events summary if available
+        if 'events_summary' in report_content:
+            report_data['events_summary'] = report_content['events_summary']
+            
+        # Create the document
+        report_ref.set(report_data)
         
-        # If events were found, store them in a subcollection
+        # Store events in subcollection if they exist
         if report_content.get('events'):
-            events_collection = reports_ref.collection('events')
+            events_collection = report_ref.collection('events')
             for event in report_content['events']:
-                events_collection.add({
-                    **event,
+                event_data = {
+                    'name': event.get('name'),
+                    'description': event.get('description'),
+                    'date': event.get('date'),
+                    'location': event.get('location'),
+                    'url': event.get('url'),
                     'timestamp': firestore.SERVER_TIMESTAMP
-                })
+                }
+                events_collection.add(event_data)
         
-        return ReportResponse(
-            success=True,
-            reportId=reports_ref.id
-        )
+        return {
+            'success': True,
+            'reportId': report_ref.id
+        }
         
     except Exception as e:
-        return ReportResponse(
-            success=False,
-            error=str(e)
-        ) 
+        print(f"Error generating report: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        } 

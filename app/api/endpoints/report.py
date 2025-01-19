@@ -4,6 +4,11 @@ from app.utils.firebase import db
 from pydantic import BaseModel
 from typing import List, Optional
 from app.services.report_service import generate_report_content
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -24,15 +29,30 @@ class ReportResponse(BaseModel):
 @router.post("/generate-report", response_model=ReportResponse)
 async def generate_report(request: ReportRequest):
     try:
+        logger.info("=== ENDPOINT CALLED ===")
+        logger.info(f"Received request: {request}")
+        
+        # Debug logs
+        logger.info("================================================")
+        logger.info(f"Search Queries: {request.searchQueries}")
+        logger.info(f"URLs: {request.urls}")
+        logger.info(f"Location: {request.location}")
+        logger.info(f"Business Name: {request.businessName}")
+        logger.info(f"User ID: {request.userId}")
+        logger.info(f"Email: {request.email}")
+        
         # Generate report content using LangChain
+        logger.info("=== GENERATING REPORT CONTENT ===")
         report_content = await generate_report_content(
             search_queries=request.searchQueries,
             urls=request.urls,
             location=request.location,
-            business_name=request.businessName
+            businessName=request.businessName
         )
+        logger.info(f"Report content generated: {report_content}")
         
         # Create a new report document
+        logger.info("=== CREATING FIREBASE DOCUMENT ===")
         report_ref = db.collection('users').document(request.userId)\
                       .collection('reports').document()
         
@@ -50,10 +70,13 @@ async def generate_report(request: ReportRequest):
             report_data['events_summary'] = report_content['events_summary']
             
         # Create the document
+        logger.info(f"Saving document with data: {report_data}")
         report_ref.set(report_data)
+        logger.info(f"Document saved with ID: {report_ref.id}")
         
         # Store events in subcollection if they exist
         if report_content.get('events'):
+            logger.info("=== STORING EVENTS ===")
             events_collection = report_ref.collection('events')
             for event in report_content['events']:
                 event_data = {
@@ -65,14 +88,20 @@ async def generate_report(request: ReportRequest):
                     'timestamp': firestore.SERVER_TIMESTAMP
                 }
                 events_collection.add(event_data)
+            logger.info(f"Stored {len(report_content['events'])} events")
         
+        logger.info("=== ENDPOINT COMPLETED SUCCESSFULLY ===")
         return {
             'success': True,
             'reportId': report_ref.id
         }
         
     except Exception as e:
-        print(f"Error generating report: {str(e)}")
+        logger.error("=== ERROR IN ENDPOINT ===")
+        logger.error(f"Error generating report: {str(e)}")
+        logger.error(f"Error type: {type(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return {
             'success': False,
             'error': str(e)

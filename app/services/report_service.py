@@ -5,7 +5,7 @@ from typing import List
 from app.utils.search import perform_google_search, process_search_results
 from app.utils.local_events import search_local_events, summarize_local_events
 
-async def generate_report_content(search_queries: List[str], urls: List[str], location: str = None) -> dict:
+async def generate_report_content(search_queries: List[str], urls: List[str], location: str = None, businessName: str = None) -> dict:
     """Generate a comprehensive report using LangChain and include local events if location is provided."""
     
     # Collect search results using existing search functionality
@@ -30,6 +30,8 @@ async def generate_report_content(search_queries: List[str], urls: List[str], lo
     2. Identifies key patterns and insights
     3. Provides relevant recommendations
     4. Cites specific sources when appropriate
+
+    If you can't find any information, just give a blank report.
     
     Report:
     """

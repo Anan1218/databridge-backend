@@ -67,7 +67,7 @@ async def fetch_ticketmaster_events(location: str) -> List[dict]:
         'postalCode': postal_code,
         'startDateTime': start_time,
         'endDateTime': end_time,
-        'radius': 100,
+        'radius': 15,
         'unit': 'miles',
         'size': 100,
         'locale': '*'  # Include locale parameter as per your example

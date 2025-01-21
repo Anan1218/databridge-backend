@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 import os
 import requests
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import calendar
 from app.utils.address_parser import extract_city_and_state
 import usaddress
@@ -43,39 +43,47 @@ async def fetch_ticketmaster_events(location: str) -> List[dict]:
     if not api_key:
         raise HTTPException(status_code=500, detail="Ticketmaster API key not configured")
 
-    # Extract postal code from the full address
+    # Extract postal code from the full address and log it
     tagged_address, _ = usaddress.tag(location)
     postal_code = tagged_address.get('ZipCode')
     
     if not postal_code:
         raise HTTPException(status_code=400, detail="Could not find postal code in address. Please provide a valid address with ZIP code.")
+    else:
+        print(f"Extracted postal code: {postal_code}")
 
-    # Get current month date range
+    # Get date range (today + 30 days)
     today = date.today()
-    _, last_day = calendar.monthrange(today.year, today.month)
-    start_date = datetime(today.year, today.month, 1).isoformat() + 'Z'
-    end_date = datetime(today.year, today.month, last_day).isoformat() + 'Z'
+    start_date = datetime.now()
+    end_date = start_date + timedelta(days=30)
+
+    # Format dates to the required format without milliseconds
+    start_time = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+    end_time = end_date.strftime('%Y-%m-%dT%H:%M:%SZ')
 
     url = 'https://app.ticketmaster.com/discovery/v2/events.json'
     params = {
         'apikey': api_key,
         'postalCode': postal_code,
-        'startDateTime': start_date,
-        'endDateTime': end_date,
-        'radius': 15,
+        'startDateTime': start_time,
+        'endDateTime': end_time,
+        'radius': 100,
         'unit': 'miles',
-        'size': 100
+        'size': 100,
+        'locale': '*'  # Include locale parameter as per your example
     }
-
+    
     try:
         response = requests.get(url, params=params)
         response.raise_for_status()
         data = response.json()
         
         if '_embedded' not in data or 'events' not in data['_embedded']:
+            print("No events found in the response.")
             return []
             
         return data['_embedded']['events']
+        
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=f"Error fetching events: {str(e)}")
 
@@ -85,14 +93,47 @@ async def get_events(
     request: EventRequest
 ):
     try:
-        # Fetch events from Ticketmaster
+        # Fetch events from Ticketmaster and log the number of events
         events = await fetch_ticketmaster_events(request.location)
+        print(f"Number of events fetched: {len(events)}")
+        
+        if not events:
+            return {
+                'success': True,
+                'message': 'No events found for the specified criteria',
+                'events_count': 0
+            }
+        
+        # Get current month and year for collection name
+        today = date.today()
+        collection_id = f"{today.year}_{today.month:02d}"
         
         # Store events in Firebase
-        events_ref = db.collection('users').document(user_id).collection('events')
+        events_ref = (db.collection('users')
+                     .document(user_id)
+                     .collection('events')
+                     .document(collection_id)
+                     .collection('event_items'))
+        
         batch = db.batch()
         
+        # Create metadata document
+        month_metadata_ref = (db.collection('users')
+                            .document(user_id)
+                            .collection('events')
+                            .document(collection_id))
+        
+        metadata = {
+            'month': today.month,
+            'year': today.year,
+            'total_events': len(events),
+            'location': request.location,
+            'last_updated': firestore.SERVER_TIMESTAMP
+        }
+        batch.set(month_metadata_ref, metadata)
+        
         for event in events:
+            print(f"Processing event: {event['id']}")  # Log each event being processed
             event_doc = events_ref.document(event['id'])
             event_data = {
                 'event_id': event['id'],
@@ -107,18 +148,20 @@ async def get_events(
                 'classifications': event.get('classifications', []),
                 'created_at': firestore.SERVER_TIMESTAMP
             }
+            print(f"Event data to be stored: {event_data}")  # Log the event data
             batch.set(event_doc, event_data)
 
-        # Commit the batch
         batch.commit()
+        print("Batch commit successful.")  # Log successful commit
 
         return {
             'success': True,
-            'message': 'Events successfully synced',
+            'message': f'Events successfully synced for {collection_id}',
             'events_count': len(events)
         }
 
     except Exception as e:
+        print(f"Error during event sync: {str(e)}")  # Log the error
         return {
             'success': False,
             'message': 'Failed to sync events',

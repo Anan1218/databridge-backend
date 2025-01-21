@@ -8,13 +8,8 @@ import os
 import requests
 from datetime import datetime, date
 import calendar
-import logging
 from app.utils.address_parser import extract_city_and_state
 import usaddress
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 router = APIRouter(
     tags=["events"]
@@ -64,12 +59,12 @@ async def fetch_ticketmaster_events(location: str) -> List[dict]:
     url = 'https://app.ticketmaster.com/discovery/v2/events.json'
     params = {
         'apikey': api_key,
-        'postalCode': postal_code,  # Changed from city/state to postal code
+        'postalCode': postal_code,
         'startDateTime': start_date,
         'endDateTime': end_date,
         'radius': 15,
         'unit': 'miles',
-        'size': 100  # Maximum number of results
+        'size': 100
     }
 
     try:
@@ -77,13 +72,11 @@ async def fetch_ticketmaster_events(location: str) -> List[dict]:
         response.raise_for_status()
         data = response.json()
         
-        # Check if events exist in response
         if '_embedded' not in data or 'events' not in data['_embedded']:
             return []
             
         return data['_embedded']['events']
     except requests.exceptions.RequestException as e:
-        logger.error(f"Ticketmaster API error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching events: {str(e)}")
 
 @router.post("/events/{user_id}", response_model=EventResponse)
@@ -126,7 +119,6 @@ async def get_events(
         }
 
     except Exception as e:
-        logger.error(f"Error syncing events: {str(e)}")
         return {
             'success': False,
             'message': 'Failed to sync events',

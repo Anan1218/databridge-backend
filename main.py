@@ -1,10 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.endpoints import report, events
+from app.api.endpoints import report, events, posts
+from app.scheduler import start_scheduler
 
 app = FastAPI(
-    title="DataBridge API",
-    description="Backend API for DataBridge application",
+    title="ProspectAI API",
+    description="Backend API for ProspectAI application",
     version="1.0.0"
 )
 
@@ -17,9 +18,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
-app.include_router(report.router, prefix="/api", tags=["search"])
-app.include_router(events.router, prefix="/api", tags=["events"])
+# Include routers from endpoints modules
+app.include_router(posts.router)
+
+@app.on_event("startup")
+def on_startup():
+    start_scheduler()
 
 if __name__ == "__main__":
     import uvicorn
